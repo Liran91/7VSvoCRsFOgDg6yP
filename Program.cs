@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.IO
 
 namespace LiranGiladHPEInterviewAssigment
 {
@@ -50,15 +51,23 @@ namespace LiranGiladHPEInterviewAssigment
                 logFileName = logFilesNameList[0];
             }
 
-            RunLogger(MaxNumOfEventsPerMin, loadTestLenInMin, rampUpPeriodInMin, tearDownPeriodInMin, logFilesNameList);
+            RunLogger(MaxNumOfEventsPerMin, loadTestLenInMin, rampUpPeriodInMin, tearDownPeriodInMin, logFileName);
         }
 
 
-        public void RunLogger(float maxNumOfEventsPerMin, float loadTestLenInMin, float rampUpPeriodInMin, float tearDownPeriodInMin, List<string> logFileNameList )
+        public void RunLogger(float maxNumOfEventsPerMin, float loadTestLenInMin, float rampUpPeriodInMin, float tearDownPeriodInMin, string logFileName )
         {
+            FileStream fileStream = new FileStream(logFileName, FileMode.Create);
+
             float rampUpLoggingRate = GetLoggingRateDuringPhase(maxNumOfEventsPerMin, rampUpPeriodInMin);
-            float loadTestLoggingRate = GetLoggingRateDuringPhase(maxNumOfEventsPerMin, loadTestLenInMin);
             float tearDownLoggingRate = GetLoggingRateDuringPhase(maxNumOfEventsPerMin, tearDownPeriodInMin);
+
+            var startTime = DateTime.UtcNow;
+            while(DateTime.UtcNow - startTime < TimeSpan.FromMinutes(loadTestLenInMin))
+            {
+
+            }
+
         }
 
         public string GenerateLogString()
@@ -67,14 +76,45 @@ namespace LiranGiladHPEInterviewAssigment
 
             logString.Append(DateTime.Now.ToString());
             logString.Append(" ");
+
             eLogLevel logLevel = (eLogLevel)rand.Next(1,3);
             string logLevelStr = Enum.GetName(typeof(eLogLevel),logLevel);
 
             logString.Append(logLevelStr);
             logString.Append(" ");
+
             string line1 = GenerateRandomLine(128);
+            logString.Append(line1);
+            logString.Append(string.Format(@"{0}\t\t\t\t\t", Environment.NewLine));
 
+            if(CheckIfToAddLine(15))
+            {
+                string line2 = GenerateRandomLine(100);
+                logString.Append(line2);
+                logString.Append(string.Format(@"{0}\t\t\t\t\t", Environment.NewLine));
+            }
+            
+            if(CheckIfToAddLine(5))
+            {
+                string line3 = GenerateRandomLine(80);
+                logString.Append(line3);
+            }
 
+            return logString.ToString();
+        }
+
+        public bool CheckIfToAddLine(int chanceToAddLine)
+        {
+            bool addLine = false;
+
+            int rollResult = rand.Next(1, 100);
+
+            if(rollResult >= 1 && rollResult <= chanceToAddLine)
+            {
+                addLine = true;
+            }
+
+            return addLine;
         }
 
         public string GenerateRandomLine(int lineLength)
