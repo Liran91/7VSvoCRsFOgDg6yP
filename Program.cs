@@ -6,40 +6,81 @@ namespace LiranGiladHPEInterviewAssigment
 {
     class Program
     {
+        const float k_DefaultMaxNumOfEventsPerMin = 1000;
+        const float k_DefaultLoadTestLenInMin = 1;
+        const float k_DefaultRampUpPeriodInMin = 0.2f;
+        const float k_DefaultTearDownPeriodInMin = 0.2f;
+        const int k_NoRangeLimit = 0;
+
         public void Main()
         {
-            const float k_DefaultMaxNumOfEventsPerMin = 1000;
-            const float k_DefaultLoadTestLenInMin = 1;
-            const float k_DefaultRampUpPeriodInMin = 0.2f;
-            const float k_DefaultTearDownPeriodInMin = 0.2f;
-            const int k_NoRangeLimit = 0;
-            DateTime timeAndDate = DateTime.Now;
+            char[] delimiterChars = { ' ', ';' };
+            string inputStr = System.Console.ReadLine();
+            string[] tokenizedInputStr = inputStr.Split(delimiterChars);
+            List<string> logFilesNameList = new List<string>();
 
-            float MaxNumOfEventsPerMin = GetValidInput(k_NoRangeLimit, k_NoRangeLimit, k_DefaultMaxNumOfEventsPerMin);
-            float loadTestLenInMin = GetValidInput(1, 60, k_DefaultMaxNumOfEventsPerMin);
-            float rampUpPeriodInMin = GetValidInput(1, 60, k_DefaultMaxNumOfEventsPerMin);
-            float tearDownPeriodInMin = GetValidInput(1, 60, k_DefaultMaxNumOfEventsPerMin);
+            float MaxNumOfEventsPerMin = CheckIfInputIsValid(tokenizedInputStr[0], k_NoRangeLimit, k_NoRangeLimit, k_DefaultMaxNumOfEventsPerMin);
+            float loadTestLenInMin = CheckIfInputIsValid(tokenizedInputStr[1], 1, 60, k_DefaultLoadTestLenInMin);
+            float rampUpPeriodInMin = CheckIfInputIsValid(tokenizedInputStr[2], 0, 15, k_DefaultRampUpPeriodInMin);
+            float tearDownPeriodInMin = CheckIfInputIsValid(tokenizedInputStr[3], 0, 15, k_DefaultTearDownPeriodInMin);
 
+            int remainingStringsInInputStr = tokenizedInputStr.Length - 4;
+
+            for (int i = 4; i < remainingStringsInInputStr; i++)
+            {
+                logFilesNameList.Add(tokenizedInputStr[i]);
+            }
+
+            CheckIfFileExtensionsAreValid(logFilesNameList);
+
+            RunLogger(MaxNumOfEventsPerMin, loadTestLenInMin, rampUpPeriodInMin, tearDownPeriodInMin, logFilesNameList);
+        }
+
+        public void RunLogger(float MaxNumOfEventsPerMin, float loadTestLenInMin, float rampUpPeriodInMin, float tearDownPeriodInMin, List<string> logFileNameList )
+        {
 
         }
 
-        public float GetValidInput(int minRange, int maxRange, float defaultValue)
+        public void CheckIfFileExtensionsAreValid(List<string> logFileNameList)
         {
-            float returnedValue;
+            string extensionStr;
 
-            if (minRange == 0 && minRange == 0)
+            foreach (string fileName in logFileNameList)
             {
-                System.Console.WriteLine(@"Please enter a numeric value:
-(any non-numeric or input outside the designated range will result in the default value being used)");
-                float.TryParse(System.Console.ReadLine(), out returnedValue);
+                int strLen = fileName.Length;
+                extensionStr = fileName.Substring(strLen - 4);
+
+                if(extensionStr != ".log" && extensionStr != ".txt")
+                {
+                    logFileNameList.Remove(fileName);
+                }
+            }
+
+            if(logFileNameList.Count == 0)
+            {
+                StringBuilder defaultFileName = new StringBuilder();
+                defaultFileName.Append(DateTime.Now.ToString());
+                defaultFileName.Append(".log");
+                logFileNameList.Add(defaultFileName.ToString());
+            }
+
+        }
+
+        public float CheckIfInputIsValid(string input,int minRange, int maxRange, float defaultValue)
+        {
+           float returnedValue;
+           bool validInput = float.TryParse(System.Console.ReadLine(), out returnedValue);
+
+            if (minRange == k_NoRangeLimit && maxRange == k_NoRangeLimit)
+            {
+                if (!validInput || returnedValue < 0)
+                {
+                    returnedValue = defaultValue;
+                }
             }
             else
             {
-                System.Console.WriteLine(@"Please enter a value between {0} and {1}:
-(any non-numeric or input outside the designated range will result in the default value being used)", minRange, maxRange);
-                float.TryParse(System.Console.ReadLine(), out returnedValue);
-
-                if (returnedValue > maxRange || returnedValue < minRange)
+                if (!validInput || returnedValue > maxRange || returnedValue < minRange)
                 {
                     returnedValue = defaultValue;
                 }
@@ -48,6 +89,8 @@ namespace LiranGiladHPEInterviewAssigment
             return returnedValue;
 
         }
+
+         
     }
 }
 
