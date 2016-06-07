@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using System.IO;
-
+using System.Timers;
 namespace LiranHPAssigment
 {
    public enum eLogLevel
@@ -19,7 +19,11 @@ namespace LiranHPAssigment
         const int k_SecondInMilisec = 1000;
         const int k_SecondsInAMinute = 60;
         const int k_NoRangeLimit = 0;
+        const int k_Second = 1;
         Random m_rand = new Random();
+        float m_EventsPerSec = 0;
+        float m_TearDownLoggingRateIncrementPerSec;
+        float m_RampUpLoggingRateIncrementPerSec;
         StreamWriter m_logFile;
 
         public void RunLogger()
@@ -87,62 +91,96 @@ namespace LiranHPAssigment
             m_logFile = File.AppendText(path);
 
             float maximumLoadPeriodInMinutes = loadTestLengthInMinutes - (rampUpPeriodInMinutes + tearDownPeriodInMinutes);
-            float rampUpLoggingRateIncrementPerSec = GetLoggingRateIncrementPerSec(maxNumOfEventsPerMinute, rampUpPeriodInMinutes);
-            float tearDownLoggingRateIncrementPerSec = GetLoggingRateIncrementPerSec(maxNumOfEventsPerMinute, tearDownPeriodInMinutes);
-            float eventsPerMin = 0;
-            float numOfTimesToLogPerSec;
+            m_RampUpLoggingRateIncrementPerSec = GetLoggingRateIncrementPerSec(maxNumOfEventsPerMinute, rampUpPeriodInMinutes);
+            m_TearDownLoggingRateIncrementPerSec = GetLoggingRateIncrementPerSec(maxNumOfEventsPerMinute, tearDownPeriodInMinutes);
+            int sleepDurationBetweenEvents;
 
             ProgramStatusPrinter.PrintLoggingToFileStarted();
+
+            m_EventsPerSec = m_RampUpLoggingRateIncrementPerSec;
+
+            System.Timers.Timer LogIntervalTimer = new System.Timers.Timer();
+            LogIntervalTimer.Elapsed += new ElapsedEventHandler(WriteToLogOnInterval);
+            LogIntervalTimer.Interval = k_SecondInMilisec;
+            LogIntervalTimer.Enabled = true;
+
+            System.Timers.Timer EventsPerSecIncTimer = new System.Timers.Timer();
+            EventsPerSecIncTimer.Interval = k_SecondInMilisec;
+            EventsPerSecIncTimer.Elapsed += new ElapsedEventHandler(IncreaseEventsPerSec);
+            EventsPerSecIncTimer.Enabled = true;
+
+            LogIntervalTimer.Start();
+            EventsPerSecIncTimer.Start();
 
             var startTime = DateTime.UtcNow;
             while (DateTime.UtcNow - startTime < TimeSpan.FromSeconds(rampUpPeriodInMinutes*k_SecondsInAMinute))
             {
-                eventsPerMin += rampUpLoggingRateIncrementPerSec;
-
-                numOfTimesToLogPerSec = (int)(eventsPerMin / k_SecondsInAMinute);
-
-                for (int i = 0; i < numOfTimesToLogPerSec; i++)
-                {
-                    string logString = GenerateLogString();
-                    m_logFile.WriteLine(logString);
-                }
-
-                System.Threading.Thread.Sleep(k_SecondInMilisec);
+                LogIntervalTimer.Interval = (int)(k_SecondInMilisec / m_EventsPerSec);
             }
 
-            numOfTimesToLogPerSec = (float)(maxNumOfEventsPerMinute / k_SecondsInAMinute);
-            int LogFrequency = (int)(k_SecondInMilisec / numOfTimesToLogPerSec);
+            LogIntervalTimer.Stop();
+            EventsPerSecIncTimer.Stop();
+            m_EventsPerSec = maxNumOfEventsPerMinute / 60;
+            sleepDurationBetweenEvents = (int)(k_SecondInMilisec / m_EventsPerSec);
+            LogIntervalTimer.Interval = sleepDurationBetweenEvents;
+            LogIntervalTimer.Start();
 
             startTime = DateTime.UtcNow;
             while (DateTime.UtcNow - startTime < TimeSpan.FromSeconds(maximumLoadPeriodInMinutes * k_SecondsInAMinute))
             {
-                string logString = GenerateLogString();
-                m_logFile.WriteLine(logString);
 
-                System.Threading.Thread.Sleep(LogFrequency);
             }
+            LogIntervalTimer.Stop();
+            
+            m_EventsPerSec = maxNumOfEventsPerMinute;
 
+            System.Timers.Timer EventsPerSecDecTimer = new System.Timers.Timer();
+            EventsPerSecDecTimer.Interval = k_SecondInMilisec;
+            EventsPerSecDecTimer.Elapsed += new ElapsedEventHandler(DecreaseEventsPerSec);
+            EventsPerSecDecTimer.Enabled = true;
+
+
+            LogIntervalTimer.Start();
+            EventsPerSecDecTimer.Start();
             startTime = DateTime.UtcNow;
-            eventsPerMin = maxNumOfEventsPerMinute;
             while (DateTime.UtcNow - startTime < TimeSpan.FromSeconds(tearDownPeriodInMinutes * k_SecondsInAMinute))
             {
-
-                eventsPerMin -= tearDownLoggingRateIncrementPerSec;
-
-                numOfTimesToLogPerSec = (int)(eventsPerMin / k_SecondsInAMinute);
-
-                for (int i = 0; i < numOfTimesToLogPerSec; i++)
-                {
-                    string logString = GenerateLogString();
-                    m_logFile.WriteLine(logString);
-                }
-
-                System.Threading.Thread.Sleep(k_SecondInMilisec);
+                LogIntervalTimer.Interval = k_SecondInMilisec / m_EventsPerSec;
             }
+
+            LogIntervalTimer.Stop();
+            EventsPerSecDecTimer.Stop();
 
             m_logFile.Close();
 
             ProgramStatusPrinter.PrintLoggingDone();
+        }
+
+        private void WriteToLogOnInterval(object source, ElapsedEventArgs e)
+        {
+            string logString = GenerateLogString();
+            m_logFile.WriteLine(logString);
+            (source as Timer).Start();
+        }
+
+        private void IncreaseEventsPerSec(object source, ElapsedEventArgs e)
+        {
+            (source as Timer).Stop();
+            m_EventsPerSec += m_RampUpLoggingRateIncrementPerSec;
+            (source as Timer).Start();
+        }
+
+        private void DecreaseEventsPerSec(object source, ElapsedEventArgs e)
+        {
+            (source as Timer).Stop();
+            m_EventsPerSec -= m_TearDownLoggingRateIncrementPerSec;
+            (source as Timer).Start();
+        }
+
+        private void WriteLogLineToFile()
+        {
+            string logString = GenerateLogString();
+            m_logFile.WriteLine(logString);
         }
 
         private string GenerateLogString()
