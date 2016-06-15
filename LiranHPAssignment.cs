@@ -7,11 +7,11 @@ namespace MonoTest
 {
     class Program
     {
-        public static void Main()
+        public static void Main(string[] argv)
         {
             int processID = System.Diagnostics.Process.GetCurrentProcess().Id;
             System.Console.WriteLine("Process ID: {0}", processID.ToString());
-            Logger logger = new Logger();
+            Logger logger = new Logger(argv);
             logger.RunLogger();
         }
     }
@@ -37,15 +37,16 @@ namespace MonoTest
         float m_TearDownLoggingRateIncrementPerSec;
         float m_RampUpLoggingRateIncrementPerSec;
         StreamWriter m_logFile;
+        string[] m_inputStr;
+
+       public Logger(string[] arguments)
+        {
+            m_inputStr = arguments;
+
+        }
 
         public void RunLogger()
         {
-            char[] delimiterChars = { ' ', ';' };
-
-            ProgramStatusPrinter.PrintInputRequest();
-
-            string inputStr = System.Console.ReadLine();
-            string[] tokenizedInputStr = inputStr.Split(delimiterChars);
             List<string> logFilesNameList = new List<string>();
             float loadTestLengthInMinutes;
             float rampUpPeriodInMinutes;
@@ -53,27 +54,27 @@ namespace MonoTest
 
             ProgramStatusPrinter.PrintInitializingAndValidatingUserInput();
 
-            m_MaxNumOfEventsPerMinute = (int)CheckIfValidInputString(tokenizedInputStr, 0, k_DefaultMaxNumOfEventsPerMin, k_NoRangeLimit, k_NoRangeLimit);
-            loadTestLengthInMinutes = CheckIfValidInputString(tokenizedInputStr, 1, k_DefaultLoadTestLenInMin, 1, 60);
-            rampUpPeriodInMinutes = CheckIfValidInputString(tokenizedInputStr, 2, k_DefaultRampUpPeriodInMin, 0, 15);
-            tearDownPeriodInMinutes = CheckIfValidInputString(tokenizedInputStr, 3, k_DefaultTearDownPeriodInMin, 0, 15);
+            m_MaxNumOfEventsPerMinute = (int)CheckIfValidInputString(m_inputStr, 0, k_DefaultMaxNumOfEventsPerMin, k_NoRangeLimit, k_NoRangeLimit);
+            loadTestLengthInMinutes = CheckIfValidInputString(m_inputStr, 1, k_DefaultLoadTestLenInMin, 1, 60);
+            rampUpPeriodInMinutes = CheckIfValidInputString(m_inputStr, 2, k_DefaultRampUpPeriodInMin, 0, 15);
+            tearDownPeriodInMinutes = CheckIfValidInputString(m_inputStr, 3, k_DefaultTearDownPeriodInMin, 0, 15);
 
-            for (int i = 4; i < tokenizedInputStr.Length; i++)
+           for (int i = 4; i < m_inputStr.Length; i++)
             {
-                logFilesNameList.Add(tokenizedInputStr[i]);
+                logFilesNameList.Add(m_inputStr[i]);
             }
 
-            CheckIfFileExtensionsAreValid(logFilesNameList);
+           List<string> validNamesList = CheckIfFileExtensionsAreValid(logFilesNameList);
 
             string logFileName;
 
-            if (logFilesNameList.Count > 1)
+            if (validNamesList.Count > 1)
             {
-                logFileName = GetRandomFileNameFromFileNameList(logFilesNameList);
+                logFileName = GetRandomFileNameFromFileNameList(validNamesList);
             }
             else
             {
-                logFileName = logFilesNameList[0];
+                logFileName = validNamesList[0];
             }
 
             StartLogging(loadTestLengthInMinutes, rampUpPeriodInMinutes, tearDownPeriodInMinutes, logFileName);
@@ -98,8 +99,12 @@ namespace MonoTest
 
         private void StartLogging(float loadTestLengthInMinutes, float rampUpPeriodInMinutes, float tearDownPeriodInMinutes, string logFileName)
         {
-
-            string path = string.Format(@".\{0}", logFileName);
+//            Console.WriteLine(@"Max events number of events per sec: {0}
+//Load test length in minutes: {1}
+//Ramp up period in minutes: {2}
+//Tear down period in minutes: {3}
+//log file name: {4}", m_MaxNumOfEventsPerMinute,loadTestLengthInMinutes, rampUpPeriodInMinutes, tearDownPeriodInMinutes, logFileName);
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, logFileName);
             m_logFile = new StreamWriter(path, true);
             float sleepDurationBetweenEvents = 0;
             float maximumLoadPeriodInMinutes = loadTestLengthInMinutes - (rampUpPeriodInMinutes + tearDownPeriodInMinutes);
@@ -310,33 +315,36 @@ namespace MonoTest
             return (logFilesNameList[fileNameIndex]);
         }
 
-        private void CheckIfFileExtensionsAreValid(List<string> logFileNameList)
+        private List<string> CheckIfFileExtensionsAreValid(List<string> logFileNameList)
         {
             string extensionStr;
-
+            List<string> validNameList = new List<string>();
             for (int i = 0; i < logFileNameList.Count; i++)
             {
                 int strLen = logFileNameList[i].Length;
+
                 if (strLen >= 4)
                 {
                     extensionStr = logFileNameList[i].Substring(strLen - 4);
 
-                    if (extensionStr != ".log" && extensionStr != ".txt")
+                    if (extensionStr == ".log" || extensionStr == ".txt")
                     {
-                        logFileNameList.Remove(logFileNameList[i].ToString());
+                        validNameList.Add(logFileNameList[i].ToString());
                     }
                 }
             }
 
 
-            if (logFileNameList.Count == 0)
+            if (validNameList.Count == 0)
             {
                 StringBuilder defaultFileName = new StringBuilder();
                 Int32 unixTimestamp = (Int32)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
                 defaultFileName.Append(unixTimestamp.ToString());
                 defaultFileName.Append(".log");
-                logFileNameList.Add(defaultFileName.ToString());
+                validNameList.Add(defaultFileName.ToString());
             }
+
+            return validNameList;
 
         }
 
